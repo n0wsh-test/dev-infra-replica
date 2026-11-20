@@ -1,0 +1,80 @@
+name: 'Checkout and Setup Node'
+description: 'Checks out the repository and sets up node environment.'
+author: 'Angular'
+inputs:
+  ref:
+    description: |
+      The branch, tag or SHA to checkout. Defaults to allowing actions/checkout to determine the ref.
+
+  node-version:
+    description: |
+      A specific version of node to use for the node environment, exclusive with
+      node-version-file-path input.
+
+  node-version-file-path:
+    default: '.nvmrc'
+    description: |
+      Relative path to the nvm version file to set node version, exclusive with
+      node-version-file-path input. Defaults to .nvmrc
+
+  disable-package-manager-cache:
+    description: 'When set to true, disables the package manager cache.'
+    default: false
+
+  cache-dependency-path:
+    description: |
+      File path to the pnpm lockfile, whose contents hash will be used as a cache key. Accepts multiple paths delimited by newlines.
+    default: 'pnpm-lock.yaml'
+
+  clean:
+    description: 'Whether to clean the workspace before checkout'
+    default: 'true'
+
+  skip-checkout:
+    description: 'When set to true, skips checking out the repository.'
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    # Git checkout converts to CRLF by default. This can cause e.g. the Aspect lock
+    # files to differ. See: https://github.com/actions/checkout/issues/135.
+    # It's generally a good idea to prevent such automatic transforms.
+    - run: |
+        git config --global core.autocrlf false
+        git config --global core.eol lf
+      shell: bash
+
+    - if: inputs.skip-checkout != 'true'
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        filter: blob:none
+        persist-credentials: false
+        ref: ${{ inputs.ref }}
+        clean: ${{ inputs.clean }}
+
+    - id: packageManager
+      shell: bash
+      run: |
+        PM=$(jq -r '.packageManager | match("^(npm|pnpm|yarn)@").captures[0].string' package.json || echo "")
+        echo "PACKAGE_MANAGER=$PM" >> "$GITHUB_OUTPUT"
+        if [ "$PM" == "pnpm" ]; then
+          echo "CACHE_MANAGER_VALUE=pnpm" >> "$GITHUB_OUTPUT"
+        fi
+
+    - if: steps.packageManager.outputs.PACKAGE_MANAGER == 'pnpm'
+      uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      with:
+        run_install: false
+        cache_dependency_path: ${{ inputs.cache-dependency-path }}
+        cache: ${{ inputs.disable-package-manager-cache != 'true' }}
+
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version-file: ${{ inputs.node-version-file-path }}
+        node-version: ${{ inputs.node-version }}
+        package-manager-cache: false
+
+    - name: Register problem matchers
+      run: echo "::add-matcher::$GITHUB_ACTION_PATH/matchers.json"
+      shell: bash

@@ -1,0 +1,24 @@
+name: 'Setup Bazel remote execution'
+description: 'Sets up Bazel remote execution.'
+author: 'Angular'
+inputs:
+  bazelrc:
+    default: '.bazelrc.user'
+    description: |
+      If specified, the given `bazelrc` file is being updated to always run
+      with the `--config=remote` flag. Defaults to `.bazelrc.user`
+  allow_windows_rbe:
+    default: false
+    description: |
+      Whether to allow remote execution to be configured for Windows. By default,
+      Windows is only configured to leverage remote caching.
+  google_credential:
+    description: |
+      A Google credential to be used as authentication for RBE API usages, implies
+      the RBE interaction should be done as part of a trusted build.
+
+runs:
+  using: 'node24'
+  main: 'configure-remote.js'
+  post: 'post.js'
+  post-if: 'failure()'
